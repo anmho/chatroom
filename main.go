@@ -27,8 +27,11 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 func main() {
 	flag.Parse()
 
+	hub := newHub()
+	go hub.run()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", serveHome)
+	mux.HandleFunc("GET /", serveHome)
+	mux.HandleFunc("GET /ws", serveWs(hub))
 
 	addr := fmt.Sprintf(":%s", *port)
 	srv := http.Server{

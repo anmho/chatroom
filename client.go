@@ -52,7 +52,9 @@ func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
 		err := c.conn.Close()
-		log.Println(err)
+		if err != nil {
+			log.Println(err)
+		}
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -60,7 +62,9 @@ func (c *Client) readPump() {
 	c.conn.SetPongHandler(func(string) error { return c.conn.SetReadDeadline(time.Now().Add(pongWait)) })
 
 	for {
+		log.Println("waiting for message")
 		_, message, err := c.conn.ReadMessage()
+		log.Println("received message: ", message)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -78,6 +82,7 @@ func (c *Client) readPump() {
 // A goroutine running writePump is started for each connection. The
 // application ensures that there is at most one writer by executing all writes to this hub from this goroutine.
 func (c *Client) writePump() {
+	log.Println("starting writepump")
 	ticker := time.NewTicker(pingPeriod) // sends a ping every pingPeriod
 	defer func() {
 		ticker.Stop()
@@ -85,9 +90,11 @@ func (c *Client) writePump() {
 	}()
 
 	for {
+		log.Println("writepump loop")
 		select {
 		// there is a message to send
 		case message, ok := <-c.send:
+			log.Println("writepump: message to send", message)
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel
@@ -129,22 +136,31 @@ func (c *Client) writePump() {
 }
 
 // serveWs handles
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
-		return
+func serveWs(hub *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("upgrading connection")
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		log.Println("upgraded connection")
+
+		// create new client for the peer
+		client := &Client{
+			hub:  hub,
+			conn: conn,
+			send: make(chan []byte, 256), // buffer up to 256 messages
+		}
+		log.Println("registering client")
+		// new peer has connected
+		client.hub.register <- client
+		log.Println("registered client")
+
+		// Allow collection of memory referenced by the caller by doing all work in new goroutines.
+		// e.g. err
+		// Not much benefit here, but it is a good practice to allow the caller to return early.
+		go client.writePump()
+		go client.readPump()
 	}
-
-	// create new client for the peer
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	// new peer has connected
-	client.hub.register <- client
-
-	// Allow collection of memory referenced by the caller by doing all work in new goroutines.
-	// e.g. err
-	// Not much benefit here, but it is a good practice to allow the caller to return early.
-	go client.writePump()
-	go client.readPump()
-
 }

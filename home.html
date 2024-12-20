@@ -3,59 +3,52 @@
 <head>
     <title>Chat Example</title>
     <script type="text/javascript">
-        window.onload = () => {
-            let conn;
-            const msg = document.querySelector("#msg")
-            const log = document.querySelector("#log")
+        window.onload = function () {
+            var conn;
+            var msg = document.getElementById("msg");
+            var log = document.getElementById("log");
 
-            const appendLog = (item) => {
-                const doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+            function appendLog(item) {
+                var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
                 log.appendChild(item);
-
-
                 if (doScroll) {
-                    log.scrollTop = log.scrollHeight
+                    log.scrollTop = log.scrollHeight - log.clientHeight;
                 }
             }
 
-            document.querySelector("#form").onsubmit = () => {
+            document.getElementById("form").onsubmit = function () {
                 if (!conn) {
                     return false;
                 }
-
                 if (!msg.value) {
                     return false;
                 }
-
                 conn.send(msg.value);
-                // reset the message
                 msg.value = "";
                 return false;
-            }
-
+            };
 
             if (window["WebSocket"]) {
                 conn = new WebSocket("ws://" + document.location.host + "/ws");
-                conn.onclose = (e) => {
-                    let item = document.createElement("div");
-                    item.innerHTML = "<b>Connection closed.</b>"
+                conn.onclose = function (evt) {
+                    var item = document.createElement("div");
+                    item.innerHTML = "<b>Connection closed.</b>";
                     appendLog(item);
-                }
-
-                conn.onmessage = (e) => {
-                    const messages = e.data.split("\n");
-                    for (const message of messages) {
-                        const item = document.createElement("div");
-                        item.innerText = message;
+                };
+                conn.onmessage = function (evt) {
+                    var messages = evt.data.split('\n');
+                    for (var i = 0; i < messages.length; i++) {
+                        var item = document.createElement("div");
+                        item.innerText = messages[i];
                         appendLog(item);
                     }
-                }
+                };
             } else {
-                const item = document.createElement("div");
+                var item = document.createElement("div");
                 item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
                 appendLog(item);
             }
-        }
+        };
     </script>
     <style type="text/css">
         html {
@@ -93,8 +86,13 @@
             overflow: hidden;
         }
 
-</style>
+    </style>
 </head>
 <body>
+<div id="log"></div>
+<form id="form">
+    <input type="submit" value="Send" />
+    <input type="text" id="msg" size="64" autofocus />
+</form>
 </body>
 </html>
